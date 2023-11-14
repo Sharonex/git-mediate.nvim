@@ -1,39 +1,50 @@
-M = {}
-function M.HasErrorsInQuickfix()
-    local quickfixList = vim.fn.getqflist()
+local M = {}
 
-    for _, entry in ipairs(quickfixList) do
-        if entry.type == "E" or entry.type == "error" then
-            return true -- There are errors in the quickfix list
+local function isInFileBuffer()
+    local isFileBuffer = vim.bo.buftype == ''
+    local hasFilePath = vim.fn.bufname() ~= ''
+    return isFileBuffer and hasFilePath
+end
+
+-- Improved function to handle file buffer and quickfix list actions
+function M.MyAsyncRunStop()
+    if isInFileBuffer() then
+        -- Your code for handling file buffers
+        vim.api.nvim_command('w')
+    end
+
+
+    local qflist = vim.fn.getqflist()
+    if #qflist <= 4 then
+        if isInFileBuffer() then
+            vim.api.nvim_command('e')
+        end
+    else
+        vim.api.nvim_command('copen')
+        vim.api.nvim_command('cc')
+        if isInFileBuffer() then
+            vim.api.nvim_command('e')
         end
     end
-
-    return false -- No errors found in the quickfix list
 end
 
-function M.MyAsyncRunStop()
-    -- 4 lines on no conflicts
-    if #vim.fn.getqflist() <= 4 then
-        print("No conflicts")
-        vim.cmd("Conflict3Clear")
-        vim.cmd("cclose")
-        vim.diagnostic.enable()
-        vim.cmd(":e!")
-    else
-        print("Found conflicts!")
-        vim.diagnostic.disable()
-        vim.cmd("copen")
-        vim.cmd("cc 4")
-        vim.cmd("Conflict3Highlight")
-    end
-end
-
+-- Function for Git mediateo
 function M.GitMediate()
-    vim.cmd("autocmd User AsyncRunStop lua M.MyAsyncRunStop()")
-    vim.cmd("AsyncRun git mediate -d")
+    -- Using nvim_create_autocmd for more idiomatic event handling
+    vim.api.nvim_create_autocmd('User', {
+        pattern = 'AsyncRunStop',
+        callback = function()
+            require('git-mediate').MyAsyncRunStop()
+        end,
+    })
+
+    -- Directly using the Lua API for command execution
+    vim.api.nvim_command('AsyncRun! git mediate -d')
 end
 
+-- Setup function to create user command
 function M.setup()
+    -- Using nvim_create_user_command for better API usage
     vim.api.nvim_create_user_command('GitMediate', M.GitMediate, {})
 end
 
